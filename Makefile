@@ -8,6 +8,10 @@ CPU                        = stm32f4
 LOAD_ADDRESS_stm32f4       = 0x8000000
 LOAD_ADDRESS_CLOAD_stm32f4 = 0x8004000
 
+OS                :=$(shell uname -m)
+ifeq ($(OS), arm64)
+	PYTHON    := /usr/local/Homebrew/bin/python3.9
+endif
 PYTHON            ?= python3
 
 # Cload is handled in a special way on windows in WSL to use the Windows python interpreter
