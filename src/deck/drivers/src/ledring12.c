@@ -225,8 +225,8 @@ static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
 
 static void turningSignalEffect(uint8_t buffer[][3], bool reset)
 {
-  static int gyroXId, gyroYId, gyroZId, accYId, accZId;
-  float	accY, accZ;
+  static int gyroXId, gyroYId, gyroZId, rollId;
+  static int roll;
   static bool isInitialised = false;
   static bool armOut;
   static bool armIn;
@@ -236,15 +236,13 @@ static void turningSignalEffect(uint8_t buffer[][3], bool reset)
     gyroXId = logGetVarId("gyro", "x");
     gyroYId = logGetVarId("gyro", "y");
     gyroZId = logGetVarId("gyro", "z");
-    accYId = logGetVarId("acc", "y");
-    accZId = logGetVarId("acc", "z");
+    rollId = logGetVarId("stabilizer", "roll");
     isInitialised = true;
   }
   armIn = reset ? true : armIn;
   gyroHist = gyroHist * 0.8f + (float) logGetFloat(gyroXId) + (float) logGetFloat(gyroYId) + (float) logGetFloat(gyroYId);
-  accY = logGetFloat(accYId);
-  accZ = logGetFloat(accZId);
-  if (gyroHist > 1500 && armIn)
+  roll = logGetInt(rollId);
+  if (gyroHist > 1000 && armIn)
   {
     armOut = true;
     armIn = false;
@@ -254,7 +252,7 @@ static void turningSignalEffect(uint8_t buffer[][3], bool reset)
     armIn = true;
     armOut = false;
   }
-  if (accZ > -0.5f && accZ < 0.6f && accY < -0.6f)
+  if (roll > -120 && roll < -60 && !armIn)
   {
     if (armOut)
     {
