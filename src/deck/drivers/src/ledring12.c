@@ -225,34 +225,42 @@ static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
 
 static void turningSignalEffect(uint8_t buffer[][3], bool reset)
 {
-  static int gyroXId, gyroYId, accYId, accZId;
+  static int gyroXId, gyroYId, gyroZId, accYId, accZId;
   float	accY, accZ;
   static bool isInitialised = false;
-  static bool starting;
+  static bool armOut;
+  static bool armIn;
   
   if (!isInitialised)
   {
     gyroXId = logGetVarId("gyro", "x");
     gyroYId = logGetVarId("gyro", "y");
+    gyroZId = logGetVarId("gyro", "z");
     accYId = logGetVarId("acc", "y");
     accZId = logGetVarId("acc", "z");
     isInitialised = true;
   }
+  armIn = reset ? true : armIn;
   gyroHist = gyroHist * 0.8f + (float) logGetFloat(gyroXId) + (float) logGetFloat(gyroYId) + (float) logGetFloat(gyroYId);
   accY = logGetFloat(accYId);
   accZ = logGetFloat(accZId);
-  if (accZ > -0.5f && accZ < 0.6f && accY < -0.7f)
+  if (gyroHist > 1500 && armIn)
   {
-    if (gyroHist > 1500)
+    armOut = true;
+    armIn = false;
+  }
+  else if (gyroHist < -1000)
+  {
+    armIn = true;
+    armOut = false;
+  }
+  if (accZ > -0.5f && accZ < 0.6f && accY < -0.6f)
+  {
+    if (armOut)
     {
-      if (!starting)
-      {
-        reset = true;
-        starting = true;
-      }
+      reset = true;
+      armOut = false;
     }
-    else
-      starting = false;
     blinkTurningSignal(buffer, reset);
   }
   else
