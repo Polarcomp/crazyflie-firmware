@@ -171,6 +171,94 @@ static void blackEffect(uint8_t buffer[][3], bool reset)
   }
 }
 
+/**************** Turning Signal ***************/
+
+#define ORANGE {128, 64, 0}
+
+static float gyroHist = 0.0;
+
+static const uint8_t orangeRing[][3] = {
+  BLACK, BLACK, BLACK,
+  BLACK, BLACK, BLACK,
+  ORANGE, BLACK, BLACK,
+  BLACK, BLACK, BLACK,
+};
+
+static bool blinkOff(uint8_t temp[3])
+{
+  static bool off;
+	static TickType_t xTickStart;
+
+  if (temp[0])
+    return (xTickStart = xTaskGetTickCount(), off = true);
+	if (!off || xTaskGetTickCount() - xTickStart < 250)
+    return (false);
+  temp[0] = 128;
+  temp[1] = 64;
+  temp[2] = 0;
+	return (off = false);
+}
+
+static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
+{
+  int i;
+	int	next;
+  uint8_t temp[3];
+
+	if (reset)
+    for (i=0; i < CONFIG_DECK_LEDRING_NBR_LEDS; i++) {
+      COPY_COLOR(buffer[i], orangeRing[i]);
+    }
+  COPY_COLOR(temp, buffer[0]);
+	COPY_COLOR(buffer[0], buffer[1]);
+	if (blinkOff(temp))
+    return ;
+  for (i=1; i < (CONFIG_DECK_LEDRING_NBR_LEDS / 2); i++)
+	{
+    next = i + 1;
+    COPY_COLOR(buffer[i], buffer[next]);
+		COPY_COLOR(buffer[CONFIG_DECK_LEDRING_NBR_LEDS - i],
+               buffer[CONFIG_DECK_LEDRING_NBR_LEDS - next]);
+	}
+  COPY_COLOR(buffer[(CONFIG_DECK_LEDRING_NBR_LEDS / 2)], temp);
+}
+
+static void turningSignalEffect(uint8_t buffer[][3], bool reset)
+{
+	static int gyroXId, gyroYId, accYId, accZId;
+	float	accY, accZ;
+	static bool isInitialised = false;
+	static bool starting;
+
+	if (!isInitialised)
+	{
+  	gyroXId = logGetVarId("gyro", "x");
+  	gyroYId = logGetVarId("gyro", "y");
+  	accYId = logGetVarId("acc", "y");
+  	accZId = logGetVarId("acc", "z");
+    isInitialised = true;
+	}
+	gyroHist = gyroHist * 0.8f + (float) logGetFloat(gyroXId) + (float) logGetFloat(gyroYId) + (float) logGetFloat(gyroYId);
+  accY = logGetFloat(accYId);
+  accZ = logGetFloat(accZId);
+	if (accZ > -0.5f && accZ < 0.6f && accY < -0.7f)
+	{
+    if (gyroHist > 1500)
+		{
+				if (!starting)
+				{
+          reset = true;
+          starting = true;
+				}
+		}
+		else
+				  starting = false;
+    blinkTurningSignal(buffer, reset);
+	}
+	else
+		blackEffect(buffer, true);
+}
+
 /**************** White spin ***************/
 #if CONFIG_DECK_LEDRING_NBR_LEDS > 12
 static const uint8_t whiteRing[CONFIG_DECK_LEDRING_NBR_LEDS][3] = {
@@ -961,6 +1049,7 @@ Ledring12Effect effectsFct[] =
   tiltEffect,
   brightnessEffect,
   spinEffect2,
+  turningSignalEffect,
   doubleSpinEffect,
   solidColorEffect,
   ledTestEffect,
@@ -1262,3 +1351,7 @@ PARAM_GROUP_START(deck)
 PARAM_ADD_CORE(PARAM_UINT8 | PARAM_RONLY, bcLedRing, &isInit)
 
 PARAM_GROUP_STOP(deck)
+
+LOG_GROUP_START(ring2)
+LOG_ADD(LOG_FLOAT, gyroHist, &gyroHist)
+LOG_GROUP_STOP(ring2)
