@@ -175,6 +175,7 @@ static void blackEffect(uint8_t buffer[][3], bool reset)
 
 #define ORANGE {128, 64, 0}
 
+/* Gyro History is global to allow variable logging */
 static float gyroHist = 0.0;
 
 static const uint8_t orangeRing[][3] = {
@@ -184,22 +185,24 @@ static const uint8_t orangeRing[][3] = {
   BLACK, BLACK, BLACK,
 };
 
-static bool blinkOff(uint8_t temp[3])
+static bool blinkOff(uint8_t temp[3], const uint8_t color[3])
 {
   static bool off;
   static TickType_t xTickStart;
 
-  if (temp[0])
-    return (xTickStart = xTaskGetTickCount(), off = true);
-      if (!off || xTaskGetTickCount() - xTickStart < 250)
+  if (!off)
+  {
+    if (temp[0])
+      return (xTickStart = xTaskGetTickCount(), off = true);
     return (false);
-  temp[0] = 128;
-  temp[1] = 64;
-  temp[2] = 0;
+  }
+  if (xTaskGetTickCount() - xTickStart < 250)
+    return (false);
+  COPY_COLOR(temp, color);
   return (off = false);
 }
 
-static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
+static void blinkTurningSignal(uint8_t buffer[][3], bool reset, const uint8_t color[][3])
 {
   int i;
   int	next;
@@ -207,11 +210,11 @@ static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
 
   if (reset)
     for (i=0; i < CONFIG_DECK_LEDRING_NBR_LEDS; i++) {
-      COPY_COLOR(buffer[i], orangeRing[i]);
+      COPY_COLOR(buffer[i], color[i]);
   }
   COPY_COLOR(temp, buffer[0]);
   COPY_COLOR(buffer[0], buffer[1]);
-  if (blinkOff(temp))
+  if (blinkOff(temp, color[6]))
     return ;
   for (i=1; i < (CONFIG_DECK_LEDRING_NBR_LEDS / 2); i++)
   {
@@ -221,6 +224,21 @@ static void blinkTurningSignal(uint8_t buffer[][3], bool reset)
     buffer[CONFIG_DECK_LEDRING_NBR_LEDS - next]);
   }
   COPY_COLOR(buffer[(CONFIG_DECK_LEDRING_NBR_LEDS / 2)], temp);
+}
+
+static void getArmState(bool *armOut, bool *armIn)
+{
+  if (gyroHist > 1000 && *armIn)
+  {
+    *armOut = true;
+    *armIn = false;
+    return ;
+  }
+  else if (gyroHist < -1000)
+  {
+    *armIn = true;
+    *armOut = false;
+  }
 }
 
 static void turningSignalEffect(uint8_t buffer[][3], bool reset)
@@ -239,30 +257,22 @@ static void turningSignalEffect(uint8_t buffer[][3], bool reset)
     rollId = logGetVarId("stabilizer", "roll");
     isInitialised = true;
   }
-  armIn = reset ? true : armIn;
-  gyroHist = gyroHist * 0.8f + (float) logGetFloat(gyroXId) + (float) logGetFloat(gyroYId) + (float) logGetFloat(gyroYId);
+  gyroHist = gyroHist * 0.8f + (float) logGetFloat(gyroXId) + (float) logGetFloat(gyroYId) + (float) logGetFloat(gyroZId);
   roll = logGetInt(rollId);
-  if (gyroHist > 1000 && armIn)
-  {
-    armOut = true;
-    armIn = false;
-  }
-  else if (gyroHist < -1000)
-  {
-    armIn = true;
-    armOut = false;
-  }
-  if (roll > -120 && roll < -60 && !armIn)
+  roll *= roll;
+  armIn = reset ? true : armIn;
+  getArmState(&armOut, &armIn);
+  if (roll > 3600 && roll < 14400 && !armIn)
   {
     if (armOut)
     {
       reset = true;
       armOut = false;
     }
-    blinkTurningSignal(buffer, reset);
+    blinkTurningSignal(buffer, reset, orangeRing);
   }
   else
-    blackEffect(buffer, true);
+    blinkTurningSignal(buffer, true, black);
 }
 
 /**************** White spin ***************/
